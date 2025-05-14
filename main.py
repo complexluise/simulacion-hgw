@@ -83,7 +83,8 @@ def calculate_elite_bonus(downline_data: list[tuple[int, float]], membership_lev
 
 # --- Interfaz de Usuario con Streamlit ---
 
-def main():
+def setup_page():
+    """Configura la página y aplica estilos CSS."""
     st.set_page_config(
         page_title="Simulador de Bonos HGW", 
         layout="wide",
@@ -137,11 +138,13 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
+def show_header_and_intro():
+    """Muestra el encabezado principal y la sección de introducción."""
     # Encabezado principal
     st.markdown('<h1 class="main-header">📊 Simulador de Bonos - HGW Health Green World</h1>', unsafe_allow_html=True)
 
     # Introducción y explicación
-    with st.expander("📚 ¿Qué es este simulador y cómo usarlo?", expanded=False):
+    with st.expander("📚 ¿Qué es este simulador y cómo usarlo?", expanded=True):
         st.markdown("""
         ### Bienvenido al Simulador de Bonos HGW
 
@@ -162,7 +165,8 @@ def main():
         - **Generaciones**: Niveles de profundidad en tu red de afiliados.
         """)
 
-    # Sidebar mejorada
+def setup_sidebar():
+    """Configura la barra lateral con selección de membresía y parámetros."""
     st.sidebar.markdown('<div class="section-header">🔧 Parámetros Generales</div>', unsafe_allow_html=True)
 
     # Sección de membresía con tarjetas visuales
@@ -226,24 +230,184 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # Sección de Bono de Equipo con mejor explicación y visualización
+    return membership, bv_default
+
+def show_network_visualization(membership, bv_default, downline_data, gen_count):
+    """Muestra la visualización de la red de afiliación."""
+    st.markdown('<div class="section-header">🌐 Visualización de tu Red de Afiliación</div>', unsafe_allow_html=True)
+
+    # Explicación de la visualización
+    with st.expander("ℹ️ ¿Cómo interpretar esta visualización?", expanded=True):
+        st.markdown("""
+        Esta visualización te muestra cómo se estructura tu red de afiliados según la configuración que has definido.
+
+        **Elementos de la visualización:**
+        - **Tú**: El nodo central representa tu posición en la red.
+        - **G1, G2, etc.**: Representan las generaciones de afiliados.
+        - **Conexiones**: Las líneas muestran quién patrocinó a quién.
+
+        **¿Por qué es importante?**
+        Entender la estructura de tu red te ayuda a identificar dónde necesitas fortalecer tu equipo
+        y cómo se distribuyen tus ingresos por generación.
+        """)
+
+    # Crear columnas para controles y visualización
+    viz_col1, viz_col2 = st.columns([1, 3])
+
+    with viz_col1:
+        st.markdown('<div class="highlight-box">', unsafe_allow_html=True)
+        st.subheader("Opciones de visualización")
+
+        # Opciones para personalizar la visualización
+        show_labels = st.checkbox("Mostrar etiquetas", value=True, 
+                                 help="Muestra los nombres de cada nodo en el gráfico")
+
+        node_size = st.slider("Tamaño de los nodos", min_value=300, max_value=2000, value=1200,
+                             help="Ajusta el tamaño de los círculos que representan a los afiliados")
+
+        # Selector de colores por generación
+        color_by_gen = st.checkbox("Colorear por generación", value=True,
+                                  help="Asigna diferentes colores a cada generación para distinguirlas mejor")
+
+        # Selector de layout
+        layout_type = st.radio("Tipo de visualización",
+                              ["Radial", "Árbol", "Circular"],
+                              help="Cambia la forma en que se organizan los nodos")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with viz_col2:
+        # Crear el grafo
+        graph = nx.DiGraph()
+        graph.add_node("Tú")
+
+        # Definir colores para las generaciones
+        generation_colors = ["#1E88E5", "#43A047", "#FB8C00", "#E53935", "#5E35B1", "#00ACC1"]
+
+        # Agregar nodos y conexiones
+        node_colors = ["#FF5252"]  # Color para el nodo "Tú"
+        node_sizes = [node_size * 1.2]  # Tamaño para el nodo "Tú"
+
+        for gen_idx, (cnt, _) in enumerate(downline_data, start=1):
+            for j in range(cnt):
+                label = f"G{gen_idx}-{j+1}"
+                parent = "Tú" if gen_idx == 1 else f"G{gen_idx-1}-{(j % downline_data[gen_idx-2][0])+1}"
+                graph.add_node(label)
+                graph.add_edge(parent, label)
+
+                # Asignar color según la generación
+                if color_by_gen:
+                    node_colors.append(generation_colors[(gen_idx-1) % len(generation_colors)])
+                else:
+                    node_colors.append(MEMBERSHIP[membership]['color'])
+
+                # Asignar tamaño según la generación (decreciente)
+                node_sizes.append(node_size * (0.9 ** (gen_idx-1)))
+
+        # Determinar el layout según la selección
+        if layout_type == "Árbol":
+            pos = nx.nx_agraph.graphviz_layout(graph, prog="dot")
+        elif layout_type == "Radial":
+            pos = nx.spring_layout(graph, seed=42)
+        else:  # Circular
+            pos = nx.circular_layout(graph)
+
+        # Crear la figura
+        fig, ax = plt.subplots(figsize=(10, 8))
+
+        # Dibujar el grafo
+        nx.draw(
+            graph, pos, 
+            with_labels=show_labels,
+            node_color=node_colors,
+            node_size=node_sizes,
+            edge_color="#BDBDBD",
+            width=1.5,
+            alpha=0.9,
+            font_size=10,
+            font_weight="bold",
+            ax=ax
+        )
+
+        # Agregar título
+        plt.title(f"Tu Red de Afiliación - {membership}", fontsize=16)
+
+        # Mostrar la visualización
+        st.pyplot(fig)
+
+        # Leyenda de colores por generación
+        if color_by_gen:
+            st.markdown("#### Leyenda de colores:")
+            legend_cols = st.columns(min(6, gen_count))
+            for i in range(min(gen_count, 6)):
+                with legend_cols[i]:
+                    st.markdown(f"""
+                    <div style="display: flex; align-items: center; margin-bottom: 5px;">
+                        <div style="width: 15px; height: 15px; background-color: {generation_colors[i]}; border-radius: 50%; margin-right: 5px;"></div>
+                        <div>Generación {i+1}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+def show_monetary_summary(bv_private, bv_public, membership, downline_data):
+    """Muestra el resumen monetario de los bonos."""
+    st.markdown('<div class="section-header">💵 Resumen de Ganancias</div>', unsafe_allow_html=True)
+
+    # Calcular los bonos
+    team_result = calculate_team_bonus(bv_private, bv_public, membership)
+    elite_result = calculate_elite_bonus(downline_data, membership) if MEMBERSHIP[membership]['elite_depth'] > 0 else {'total_elite_bonus': 0}
+
+    # Total de ganancias
+    total_earnings = team_result['bonus_amount'] + elite_result['total_elite_bonus']
+
+    # Mostrar el resumen
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("💰 Bono de Equipo", f"${team_result['bonus_amount']:.2f}")
+
+    with col2:
+        st.metric("🏅 Bono Élite", f"${elite_result['total_elite_bonus']:.2f}")
+
+    with col3:
+        st.metric("💵 Total Ganancias", f"${total_earnings:.2f}", delta=f"{total_earnings:.2f}")
+
+    return team_result, elite_result, total_earnings
+
+def simulate_team_bonus(membership):
+    """Simula el cálculo del Bono de Equipo."""
     st.markdown('<div class="section-header">💰 Simulación del Bono de Equipo</div>', unsafe_allow_html=True)
 
     # Explicación del Bono de Equipo
-    with st.expander("ℹ️ ¿Cómo funciona el Bono de Equipo?", expanded=False):
+    with st.expander("ℹ️ ¿Cómo funciona el Bono de Equipo?", expanded=True):
         st.markdown("""
-        El **Bono de Equipo** se calcula comparando los puntos BV generados por tus dos líneas:
+        ## 🔷 BONO DE EQUIPO – ¿Cómo se calcula?
 
-        1. **Línea Privada**: Los puntos generados por tus afiliados directos y su red.
-        2. **Línea Pública**: Los puntos generados por la línea que construye tu patrocinador.
+        **¿Qué es?**
+        Es un bono por el volumen generado entre tus dos líneas (una construida por tu patrocinador y otra por ti).
 
-        **¿Cómo se calcula?**
-        - Se toma el valor menor entre ambas líneas como base de pago
-        - Se multiplica por el porcentaje según tu nivel de membresía
-        - El resultado es tu Bono de Equipo
+        ### ✅ Requisitos:
 
-        **Ejemplo**: Si tienes 1000 BV en tu línea privada y 800 BV en tu línea pública, 
-        la base de pago será 800 BV (el menor valor).
+        * Tener **membresía activa** (mínimo 10 BV mensuales).
+        * Tener **volumen en ambas líneas** (pública y privada).
+        * Estar dentro del **tope diario** de tu membresía.
+
+        ### 💰 Cálculo:
+
+        1. **Identifica el volumen (BV) de la pierna más débil** (la que tenga menos puntos).
+        2. Aplica el **% correspondiente a tu membresía**:
+
+           * Pre-Junior → 5% (tope $50/día)
+           * Junior → 7% (tope $120/día)
+           * Senior → 8% (tope $360/día)
+           * Master → 10% (tope $720/día)
+        3. **Resultado = % × BV de la pierna menor** (limitado por tu tope diario).
+
+        #### 📌 Ejemplo:
+
+        * Línea pública: 3,000 BV
+        * Línea privada: 2,000 BV
+        * Eres Master (10%)
+          → 2,000 × 10% = **200 USD** (dentro del tope de $720 → se paga completo).
         """)
 
     # Valores de ejemplo para ayudar a los usuarios
@@ -318,22 +482,36 @@ def main():
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Sección de Bono Élite con mejor explicación y visualización
+    return bv_private, bv_public
+
+def simulate_elite_bonus(membership, bv_default):
+    """Simula el cálculo del Bono Élite."""
     st.markdown('<div class="section-header">🏅 Simulación del Bono Élite</div>', unsafe_allow_html=True)
 
     # Explicación del Bono Élite
-    with st.expander("ℹ️ ¿Cómo funciona el Bono Élite?", expanded=False):
+    with st.expander("ℹ️ ¿Cómo funciona el Bono Élite?", expanded=True):
         st.markdown("""
-        El **Bono Élite** te permite ganar un porcentaje adicional de los puntos generados por tus afiliados 
-        en diferentes niveles o generaciones de tu red.
+        ## 🔷 BONO ÉLITE – ¿Cómo se calcula?
 
-        **¿Cómo se calcula?**
-        - Por cada generación permitida según tu membresía, ganas un 4% de los puntos BV generados
-        - Las generaciones son niveles de profundidad en tu red de afiliados
-        - A mayor nivel de membresía, más generaciones puedes alcanzar
+        **¿Qué es?**
+        Es un bono de liderazgo: ganas un **4% del Bono de Equipo** que cobran tus afiliados, por generación.
 
-        **Ejemplo**: Si eres Senior, puedes ganar de 3 generaciones. Si en tu primera generación tienes 5 afiliados 
-        con 200 BV cada uno, ganarías $40 solo de esa generación (5 × 200 × 4%).
+        ### ✅ Requisitos:
+
+        * Ser **Senior** (cobras hasta 3 generaciones) o **Master** (hasta 6 generaciones).
+        * Mantenerte **activo (10 BV mensuales)**.
+
+        ### 💰 Cálculo:
+
+        1. Identifica las **ganancias de Bono de Equipo** de tus afiliados por generación.
+        2. Aplica el **4% sobre lo que cobró cada uno**, por generación calificada.
+        3. Suma los valores.
+
+        #### 📌 Ejemplo:
+
+        * Tu directo ganó $200 → tú ganas **$8** (4%).
+        * Otro afiliado en 2ª generación ganó $100 → tú ganas **$4**.
+        * En total, si tu red generó $2,000 en Bonos de Equipo, tú ganas **$80 de Bono Élite** (4% promedio).
         """)
 
         # Tabla comparativa de membresías
@@ -347,6 +525,16 @@ def main():
         | Master | 6 | Gana de 6 niveles de profundidad |
         """
         st.markdown(membership_table)
+
+        # Tabla resumen de bonos
+        st.markdown("## 🎯 En resumen:")
+        summary_table = """
+        | Bono       | Fórmula Principal                                  | Clave para maximizar                    |
+        | ---------- | -------------------------------------------------- | --------------------------------------- |
+        | **Equipo** | `% membresía × BV pierna débil`                    | Tener alta membresía y balancear líneas |
+        | **Élite**  | `4% × Bono de Equipo cobrado por tus generaciones` | Patrocinar y ayudar a que ganen         |
+        """
+        st.markdown(summary_table)
 
     # Valores de ejemplo para cada membresía
     example_gen_counts = {
@@ -488,163 +676,75 @@ def main():
             """, unsafe_allow_html=True)
 
             st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            # Mensaje para membresías que no tienen acceso al Bono Élite
-            st.markdown('<div class="info-box" style="text-align: center;">', unsafe_allow_html=True)
-            st.markdown("""
-            ### Bono Élite no disponible
 
-            Tu nivel de membresía actual no incluye el Bono Élite.
+    return downline_data, gen_count
 
-            Actualiza a **Senior** o **Master** para acceder a este beneficio adicional.
-            """)
-            st.markdown('</div>', unsafe_allow_html=True)
+def show_tips_and_footer():
+    """Muestra consejos y el pie de página."""
+    # Sección de consejos y optimización
+    st.markdown('<div class="section-header">💡 Consejos para Optimizar tus Ganancias</div>', unsafe_allow_html=True)
 
-    # Sección de visualización de la red mejorada
-    st.markdown('<div class="section-header">🌐 Visualización de tu Red de Afiliación</div>', unsafe_allow_html=True)
-
-    # Explicación de la visualización
-    with st.expander("ℹ️ ¿Cómo interpretar esta visualización?", expanded=False):
+    with st.expander("📈 Estrategias para maximizar tus bonos", expanded=False):
         st.markdown("""
-        Esta visualización te muestra cómo se estructura tu red de afiliados según la configuración que has definido.
+        ### Consejos para el Bono de Equipo:
 
-        **Elementos de la visualización:**
-        - **Tú**: El nodo central representa tu posición en la red.
-        - **G1, G2, etc.**: Representan las generaciones de afiliados.
-        - **Conexiones**: Las líneas muestran quién patrocinó a quién.
+        1. **Equilibra tus líneas**: Intenta mantener un volumen similar en ambas líneas para maximizar tu base de pago.
+        2. **Enfócate en la línea más débil**: Identifica cuál de tus líneas genera menos volumen y trabaja en fortalecerla.
+        3. **Aumenta tu nivel de membresía**: A mayor nivel, mayor porcentaje de ganancia sobre el mismo volumen.
 
-        **¿Por qué es importante?**
-        Entender la estructura de tu red te ayuda a identificar dónde necesitas fortalecer tu equipo
-        y cómo se distribuyen tus ingresos por generación.
+        ### Consejos para el Bono Élite:
+
+        1. **Ayuda a tus afiliados a ganar**: Cuanto más ganen ellos en Bono de Equipo, más ganarás tú.
+        2. **Desarrolla líderes en cada generación**: Enfócate en tener afiliados fuertes en cada nivel.
+        3. **Alcanza el nivel Master**: Te permite ganar de 6 generaciones en lugar de 3 (Senior).
         """)
 
-    # Crear columnas para controles y visualización
-    viz_col1, viz_col2 = st.columns([1, 3])
+    # Botones de acción (placeholders para futuras funcionalidades)
+    st.markdown("### 🚀 Acciones")
+    col1, col2 = st.columns(2)
 
-    with viz_col1:
-        st.markdown('<div class="highlight-box">', unsafe_allow_html=True)
-        st.subheader("Opciones de visualización")
+    with col1:
+        if st.button("📊 Descargar resumen de simulación", disabled=True):
+            st.info("Funcionalidad en desarrollo. Próximamente podrás descargar un PDF con el resumen de tu simulación.")
 
-        # Opciones para personalizar la visualización
-        show_labels = st.checkbox("Mostrar etiquetas", value=True, 
-                                 help="Muestra los nombres de cada nodo en el gráfico")
+    with col2:
+        if st.button("🔗 Compartir esta simulación", disabled=True):
+            st.info("Funcionalidad en desarrollo. Próximamente podrás compartir un enlace a esta simulación específica.")
 
-        node_size = st.slider("Tamaño de los nodos", min_value=300, max_value=2000, value=1200,
-                             help="Ajusta el tamaño de los círculos que representan a los afiliados")
-
-        # Selector de colores por generación
-        color_by_gen = st.checkbox("Colorear por generación", value=True,
-                                  help="Asigna diferentes colores a cada generación para distinguirlas mejor")
-
-        # Selector de layout
-        layout_type = st.radio("Tipo de visualización",
-                              ["Circular", "Árbol", "Radial"],
-                              help="Cambia la forma en que se organizan los nodos")
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with viz_col2:
-        # Crear el grafo
-        graph = nx.DiGraph()
-        graph.add_node("Tú")
-
-        # Definir colores para las generaciones
-        generation_colors = ["#1E88E5", "#43A047", "#FB8C00", "#E53935", "#5E35B1", "#00ACC1"]
-
-        # Agregar nodos y conexiones
-        node_colors = ["#FF5252"]  # Color para el nodo "Tú"
-        node_sizes = [node_size * 1.2]  # Tamaño para el nodo "Tú"
-
-        for gen_idx, (cnt, _) in enumerate(downline_data, start=1):
-            for j in range(cnt):
-                label = f"G{gen_idx}-{j+1}"
-                parent = "Tú" if gen_idx == 1 else f"G{gen_idx-1}-{(j % downline_data[gen_idx-2][0])+1}"
-                graph.add_node(label)
-                graph.add_edge(parent, label)
-
-                # Asignar color según la generación
-                if color_by_gen:
-                    node_colors.append(generation_colors[(gen_idx-1) % len(generation_colors)])
-                else:
-                    node_colors.append(MEMBERSHIP[membership]['color'])
-
-                # Asignar tamaño según la generación (decreciente)
-                node_sizes.append(node_size * (0.9 ** (gen_idx-1)))
-
-        # Determinar el layout según la selección
-        if layout_type == "Árbol":
-            pos = nx.nx_agraph.graphviz_layout(graph, prog="dot")
-        elif layout_type == "Radial":
-            pos = nx.spring_layout(graph, seed=42)
-        else:  # Circular
-            pos = nx.circular_layout(graph)
-
-        # Crear la figura
-        fig, ax = plt.subplots(figsize=(10, 8))
-
-        # Dibujar el grafo
-        nx.draw(
-            graph, pos, 
-            with_labels=show_labels,
-            node_color=node_colors,
-            node_size=node_sizes,
-            edge_color="#BDBDBD",
-            width=1.5,
-            alpha=0.9,
-            font_size=10,
-            font_weight="bold",
-            ax=ax
-        )
-
-        # Agregar título
-        plt.title(f"Tu Red de Afiliación - {membership}", fontsize=16)
-
-        # Mostrar la visualización
-        st.pyplot(fig)
-
-        # Leyenda de colores por generación
-        if color_by_gen:
-            st.markdown("#### Leyenda de colores:")
-            legend_cols = st.columns(min(6, gen_count))
-            for i in range(min(gen_count, 6)):
-                with legend_cols[i]:
-                    st.markdown(f"""
-                    <div style="display: flex; align-items: center; margin-bottom: 5px;">
-                        <div style="width: 15px; height: 15px; background-color: {generation_colors[i]}; border-radius: 50%; margin-right: 5px;"></div>
-                        <div>Generación {i+1}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-    # Resumen y conclusiones
-    st.markdown('<div class="info-box">', unsafe_allow_html=True)
+    # Footer
+    st.markdown("---")
     st.markdown("""
-    ### 💡 Consejos para optimizar tu red
-
-    1. **Equilibra tus líneas**: Para maximizar el Bono de Equipo, intenta mantener un balance entre tu línea privada y pública.
-
-    2. **Profundiza tus generaciones**: Si tienes membresía Senior o Master, enfócate en desarrollar múltiples generaciones para aprovechar el Bono Élite.
-
-    3. **Capacita a tus afiliados**: Ayúdalos a entender el sistema de bonos para que puedan maximizar sus propios ingresos y, por ende, los tuyos.
-    """)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Pie de página
-    st.markdown("""
-    <div style="margin-top: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px; text-align: center; font-size: 0.8rem; color: #616161;">
-        Esta simulación es una herramienta educativa. Las cifras estimadas pueden variar dependiendo del comportamiento real
-        de tu red, las compras mensuales y promociones vigentes de HGW.
+    <div style="text-align: center; color: #666; font-size: 0.8rem;">
+        <p>Simulador de Bonos HGW Health Green World | Desarrollado con ❤️ para la comunidad HGW</p>
+        <p>Este simulador es una herramienta educativa y los resultados pueden variar según las condiciones reales del mercado.</p>
     </div>
     """, unsafe_allow_html=True)
 
-    # Botón para descargar un resumen
-    if st.button("📥 Descargar resumen de mi simulación"):
-        # Aquí se podría implementar la generación de un PDF o CSV con los resultados
-        st.success("✅ Funcionalidad de descarga en desarrollo. Pronto estará disponible.")
+def main():
+    """Función principal que coordina la ejecución de todas las secciones de la aplicación."""
+    # Configurar la página y aplicar estilos CSS
+    setup_page()
 
-    # Botón para compartir
-    if st.button("📤 Compartir esta simulación"):
-        # Aquí se podría implementar la generación de un enlace para compartir
-        st.success("✅ Funcionalidad de compartir en desarrollo. Pronto estará disponible.")
+    # Mostrar encabezado e introducción
+    show_header_and_intro()
+
+    # Configurar la barra lateral y obtener parámetros
+    membership, bv_default = setup_sidebar()
+
+    # Simular el Bono Élite para obtener los datos de la red
+    downline_data, gen_count = simulate_elite_bonus(membership, bv_default)
+
+    # Mostrar la visualización de la red
+    show_network_visualization(membership, bv_default, downline_data, gen_count)
+
+    # Simular el Bono de Equipo
+    bv_private, bv_public = simulate_team_bonus(membership)
+
+    # Mostrar el resumen monetario
+    team_result, elite_result, total_earnings = show_monetary_summary(bv_private, bv_public, membership, downline_data)
+
+    # Mostrar consejos y pie de página
+    show_tips_and_footer()
 
 if __name__ == '__main__':
     main()
