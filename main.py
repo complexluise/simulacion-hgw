@@ -144,7 +144,7 @@ def show_header_and_intro():
     st.markdown('<h1 class="main-header">📊 Simulador de Bonos - HGW Health Green World</h1>', unsafe_allow_html=True)
 
     # Introducción y explicación
-    with st.expander("📚 ¿Qué es este simulador y cómo usarlo?", expanded=True):
+    with st.expander("📚 ¿Qué es este simulador y cómo usarlo?", expanded=False):
         st.markdown("""
         ### Bienvenido al Simulador de Bonos HGW
 
@@ -237,7 +237,7 @@ def show_network_visualization(membership, bv_default, downline_data, gen_count)
     st.markdown('<div class="section-header">🌐 Visualización de tu Red de Afiliación</div>', unsafe_allow_html=True)
 
     # Explicación de la visualización
-    with st.expander("ℹ️ ¿Cómo interpretar esta visualización?", expanded=True):
+    with st.expander("ℹ️ ¿Cómo interpretar esta visualización?", expanded=False):
         st.markdown("""
         Esta visualización te muestra cómo se estructura tu red de afiliados según la configuración que has definido.
 
@@ -378,7 +378,7 @@ def simulate_team_bonus(membership):
     st.markdown('<div class="section-header">💰 Simulación del Bono de Equipo</div>', unsafe_allow_html=True)
 
     # Explicación del Bono de Equipo
-    with st.expander("ℹ️ ¿Cómo funciona el Bono de Equipo?", expanded=True):
+    with st.expander("ℹ️ ¿Cómo funciona el Bono de Equipo?", expanded=False):
         st.markdown("""
         ## 🔷 BONO DE EQUIPO – ¿Cómo se calcula?
 
@@ -425,30 +425,40 @@ def simulate_team_bonus(membership):
         st.markdown('<div class="highlight-box">', unsafe_allow_html=True)
         st.subheader("Ingresa los valores de tus líneas:")
 
+        # Inicializar valores en session_state si no existen
+        if 'bv_private' not in st.session_state:
+            st.session_state.bv_private = 0.0
+        if 'bv_public' not in st.session_state:
+            st.session_state.bv_public = 0.0
+        if 'example_loaded' not in st.session_state:
+            st.session_state.example_loaded = False
+
         # Botón para cargar ejemplo
         if st.button(f"📝 Cargar ejemplo para {membership}", key="load_example_team"):
-            bv_private = example_values[membership]['private']
-            bv_public = example_values[membership]['public']
-        else:
-            bv_private = st.session_state.get('bv_private', 0.0)
-            bv_public = st.session_state.get('bv_public', 0.0)
+            st.session_state.bv_private = example_values[membership]['private']
+            st.session_state.bv_public = example_values[membership]['public']
+            st.session_state.example_loaded = True
 
-        # Campos de entrada con valores predeterminados o cargados
+        # Campos de entrada con valores de session_state
         bv_private = st.number_input(
             "BV Línea Privada", 
             min_value=0.0, 
-            value=float(bv_private),
+            value=float(st.session_state.bv_private),
             help="Puntos generados por tus afiliados directos y su red.",
-            key="bv_private"
+            key="bv_private_input"
         )
+        # Actualizar session_state con el nuevo valor
+        st.session_state.bv_private = bv_private
 
         bv_public = st.number_input(
             "BV Línea Pública", 
             min_value=0.0, 
-            value=float(bv_public),
+            value=float(st.session_state.bv_public),
             help="Puntos generados por la línea que construye tu patrocinador.",
-            key="bv_public"
+            key="bv_public_input"
         )
+        # Actualizar session_state con el nuevo valor
+        st.session_state.bv_public = bv_public
 
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -489,7 +499,7 @@ def simulate_elite_bonus(membership, bv_default):
     st.markdown('<div class="section-header">🏅 Simulación del Bono Élite</div>', unsafe_allow_html=True)
 
     # Explicación del Bono Élite
-    with st.expander("ℹ️ ¿Cómo funciona el Bono Élite?", expanded=True):
+    with st.expander("ℹ️ ¿Cómo funciona el Bono Élite?", expanded=False):
         st.markdown("""
         ## 🔷 BONO ÉLITE – ¿Cómo se calcula?
 
@@ -556,22 +566,41 @@ def simulate_elite_bonus(membership, bv_default):
         st.markdown('<div class="highlight-box">', unsafe_allow_html=True)
         st.subheader("Configura tu red de afiliados:")
 
+        # Inicializar valores en session_state si no existen
+        if 'gen_count' not in st.session_state:
+            st.session_state.gen_count = min(3, max(1, max_gen))
+
+        if 'custom_counts' not in st.session_state:
+            st.session_state.custom_counts = False
+
+        if 'downline_data' not in st.session_state:
+            st.session_state.downline_data = get_downline_counts(st.session_state.gen_count, bv_default)
+
         # Número de generaciones a simular (limitado por la membresía)
         gen_count = st.number_input(
             "Número de generaciones a simular", 
             min_value=1, 
             max_value=max(6, max_gen), 
-            value=min(3, max(1, max_gen)),
+            value=st.session_state.gen_count,
             help="Cantidad de niveles de afiliados que deseas incluir en la simulación.",
-            disabled=max_gen == 0
+            disabled=max_gen == 0,
+            key="gen_count_input"
         )
+
+        # Actualizar session_state con el nuevo valor
+        st.session_state.gen_count = gen_count
 
         # Opción para personalizar
         custom_counts = st.checkbox(
             "Personalizar afiliados y BV por generación",
+            value=st.session_state.custom_counts,
             help="Activa esta opción si deseas definir valores distintos por generación.",
-            disabled=max_gen == 0
+            disabled=max_gen == 0,
+            key="custom_counts_checkbox"
         )
+
+        # Actualizar session_state con el nuevo valor
+        st.session_state.custom_counts = custom_counts
 
         downline_data = []
 
@@ -582,44 +611,74 @@ def simulate_elite_bonus(membership, bv_default):
             if gen_count <= 3:
                 gen_cols = st.columns(gen_count)
                 for i in range(1, gen_count+1):
+                    # Inicializar valores en session_state si no existen
+                    if f'count_{i}' not in st.session_state:
+                        st.session_state[f'count_{i}'] = 5 if i == 1 else 3
+                    if f'bv_{i}' not in st.session_state:
+                        st.session_state[f'bv_{i}'] = bv_default
+
                     with gen_cols[i-1]:
                         st.markdown(f"**Generación {i}**")
                         count = st.number_input(
                             f"Afiliados", 
                             min_value=0, 
-                            value=5 if i == 1 else 3, 
+                            value=st.session_state[f'count_{i}'], 
                             key=f"c{i}"
                         )
+                        # Actualizar session_state con el nuevo valor
+                        st.session_state[f'count_{i}'] = count
+
                         bv = st.number_input(
                             f"BV por afiliado", 
                             min_value=0.0, 
-                            value=bv_default, 
+                            value=st.session_state[f'bv_{i}'], 
                             key=f"bv{i}"
                         )
+                        # Actualizar session_state con el nuevo valor
+                        st.session_state[f'bv_{i}'] = bv
+
                         downline_data.append((count, bv))
             else:
                 # Si hay muchas generaciones, usar un formato vertical
                 for i in range(1, gen_count+1):
+                    # Inicializar valores en session_state si no existen
+                    if f'count_{i}' not in st.session_state:
+                        st.session_state[f'count_{i}'] = 5 if i == 1 else 3
+                    if f'bv_{i}' not in st.session_state:
+                        st.session_state[f'bv_{i}'] = bv_default
+
                     st.markdown(f"**Generación {i}**")
                     col_a, col_b = st.columns(2)
                     with col_a:
                         count = st.number_input(
                             f"Afiliados Gen {i}", 
                             min_value=0, 
-                            value=5 if i == 1 else 3, 
+                            value=st.session_state[f'count_{i}'], 
                             key=f"c{i}"
                         )
+                        # Actualizar session_state con el nuevo valor
+                        st.session_state[f'count_{i}'] = count
                     with col_b:
                         bv = st.number_input(
                             f"BV por afiliado Gen {i}", 
                             min_value=0.0, 
-                            value=bv_default, 
+                            value=st.session_state[f'bv_{i}'], 
                             key=f"bv{i}"
                         )
+                        # Actualizar session_state con el nuevo valor
+                        st.session_state[f'bv_{i}'] = bv
                     downline_data.append((count, bv))
         else:
-            # Usar valores predeterminados
-            downline_data = get_downline_counts(gen_count, bv_default)
+            # Usar valores predeterminados o los guardados en session_state
+            if 'optimized' not in st.session_state:
+                st.session_state.optimized = False
+
+            if st.session_state.optimized:
+                # Usar valores optimizados guardados en session_state
+                downline_data = st.session_state.downline_data
+            else:
+                # Usar valores predeterminados
+                downline_data = get_downline_counts(gen_count, bv_default)
 
             # Mostrar resumen de la configuración
             st.markdown("**Configuración actual:**")
@@ -627,9 +686,27 @@ def simulate_elite_bonus(membership, bv_default):
             st.markdown(f"- Siguientes generaciones: **3 afiliados** con **{bv_default} BV** cada uno")
 
             # Botón para cargar ejemplo optimizado
-            if st.button("📝 Optimizar para mi membresía", disabled=max_gen == 0):
-                # Aquí podríamos ajustar los valores según la membresía
+            if st.button("📝 Optimizar para mi membresía", disabled=max_gen == 0, key="optimize_button"):
+                # Ajustar los valores según la membresía
+                if membership == 'Master':
+                    # Para Master, optimizamos para 6 generaciones
+                    optimized_data = get_downline_counts(6, bv_default, 7, 5)
+                elif membership == 'Senior':
+                    # Para Senior, optimizamos para 3 generaciones
+                    optimized_data = get_downline_counts(3, bv_default, 6, 4)
+                else:
+                    # Para otros niveles, usamos valores predeterminados
+                    optimized_data = get_downline_counts(gen_count, bv_default)
+
+                # Guardar los valores optimizados en session_state
+                st.session_state.downline_data = optimized_data
+                st.session_state.optimized = True
+                downline_data = optimized_data
+
                 st.success(f"✅ Configuración optimizada para {membership}")
+
+        # Guardar downline_data en session_state para uso futuro
+        st.session_state.downline_data = downline_data
 
         st.markdown('</div>', unsafe_allow_html=True)
 
