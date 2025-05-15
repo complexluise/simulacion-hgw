@@ -494,8 +494,47 @@ def simulate_team_bonus(membership):
 
     return bv_private, bv_public
 
+def generate_downline_data(membership, bv_default):
+    """Genera los datos de la red de afiliados sin mostrar la UI de simulación."""
+    # Valores de ejemplo para cada membresía
+    example_gen_counts = {
+        'Pre-Junior': 0,
+        'Junior': 0,
+        'Senior': 3,
+        'Master': 6
+    }
+
+    # Determinar cuántas generaciones mostrar según la membresía
+    max_gen = example_gen_counts[membership]
+
+    # Inicializar valores en session_state si no existen
+    if 'gen_count' not in st.session_state:
+        st.session_state.gen_count = min(3, max(1, max_gen))
+
+    if 'custom_counts' not in st.session_state:
+        st.session_state.custom_counts = False
+
+    if 'downline_data' not in st.session_state:
+        st.session_state.downline_data = get_downline_counts(st.session_state.gen_count, bv_default)
+
+    # Usar valores predeterminados o los guardados en session_state
+    if 'optimized' not in st.session_state:
+        st.session_state.optimized = False
+
+    if st.session_state.optimized:
+        # Usar valores optimizados guardados en session_state
+        downline_data = st.session_state.downline_data
+    else:
+        # Usar valores predeterminados
+        downline_data = get_downline_counts(st.session_state.gen_count, bv_default)
+
+    # Guardar downline_data en session_state para uso futuro
+    st.session_state.downline_data = downline_data
+
+    return downline_data, st.session_state.gen_count
+
 def simulate_elite_bonus(membership, bv_default):
-    """Simula el cálculo del Bono Élite."""
+    """Simula el cálculo del Bono Élite usando los datos de red existentes."""
     st.markdown('<div class="section-header">🏅 Simulación del Bono Élite</div>', unsafe_allow_html=True)
 
     # Explicación del Bono Élite
@@ -805,20 +844,26 @@ def main():
     # Mostrar encabezado e introducción
     show_header_and_intro()
 
+    # PASO 1: Configuración de la red mientras se visualiza
     # Configurar la barra lateral y obtener parámetros
     membership, bv_default = setup_sidebar()
 
-    # Simular el Bono Élite para obtener los datos de la red
-    downline_data, gen_count = simulate_elite_bonus(membership, bv_default)
+    # Obtener los datos de la red para la visualización sin mostrar la UI de simulación
+    downline_data, gen_count = generate_downline_data(membership, bv_default)
 
     # Mostrar la visualización de la red
     show_network_visualization(membership, bv_default, downline_data, gen_count)
 
-    # Simular el Bono de Equipo
+    # PASO 2: Mostrar el resumen de valores
+    # Simular el Bono de Equipo para obtener los valores necesarios para el resumen
     bv_private, bv_public = simulate_team_bonus(membership)
 
     # Mostrar el resumen monetario
     team_result, elite_result, total_earnings = show_monetary_summary(bv_private, bv_public, membership, downline_data)
+
+    # PASO 3: Mostrar detalles de las simulaciones con explicaciones
+    # Mostrar la simulación detallada del Bono Élite
+    simulate_elite_bonus(membership, bv_default)
 
     # Mostrar consejos y pie de página
     show_tips_and_footer()
